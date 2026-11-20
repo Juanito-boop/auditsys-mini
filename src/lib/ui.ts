@@ -6,7 +6,7 @@ import {
   SEVERITY_LABELS,
   THEME_LABELS,
 } from "@/shared/constants";
-import type { AuditStatus, ControlStatus, Severity, Theme } from "@/shared/types";
+import type { AuditStatus, ControlStatus, Priority, Severity, Theme } from "@/shared/types";
 
 const formateadorFecha = new Intl.DateTimeFormat("es-ES", {
   day: "numeric",
@@ -48,4 +48,38 @@ export function statusLabel(valor: AuditStatus | ControlStatus | Severity | Them
 /** Concatena clases condicionales sin dependencias externas. */
 export function cx(...clases: Array<string | false | null | undefined>): string {
   return clases.filter(Boolean).join(" ");
+}
+
+/** Aviso breve mostrado al usuario mediante `Toast`. */
+export interface Aviso {
+  mensaje: string;
+  tone: "success" | "error";
+}
+
+/** Opciones derivadas de las etiquetas compartidas: nunca se separan de el contrato. */
+export const ESTADOS_AUDITORIA = Object.keys(AUDIT_STATUS_LABELS) as AuditStatus[];
+export const ESTADOS_CONTROL = Object.keys(CONTROL_STATUS_LABELS) as ControlStatus[];
+export const SEVERIDADES = Object.keys(SEVERITY_LABELS) as Severity[];
+export const TEMAS = Object.keys(THEME_LABELS) as Theme[];
+export const PRIORIDADES: Priority[] = ["baja", "media", "alta"];
+
+/** Extrae un mensaje legible de cualquier error, incluidos errores de red. */
+export function mensajeError(
+  error: unknown,
+  fallback = "Ocurrió un error inesperado. Inténtalo de nuevo.",
+): string {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
+/** Traduce los `details` del backend a errores por campo de formulario. */
+export function erroresServidor(error: unknown, campos: string[]): Record<string, string> {
+  const detalles = (error as { details?: Array<{ path: string; message: string }> } | null)?.details;
+  const errores: Record<string, string> = {};
+  if (!Array.isArray(detalles)) return errores;
+
+  for (const detalle of detalles) {
+    const campo = detalle.path.split(".").pop() ?? "";
+    if (campos.includes(campo) && !errores[campo]) errores[campo] = detalle.message;
+  }
+  return errores;
 }
