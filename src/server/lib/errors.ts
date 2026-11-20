@@ -135,11 +135,17 @@ export function toErrorResponse(error: unknown): Response {
   const httpError =
     error instanceof HttpError ? error : error instanceof z.ZodError ? fromZodError(error) : internal();
 
+  const esInterno = httpError.code === "ERROR_INTERNO";
+  if (esInterno) {
+    // Diagnóstico solo en el servidor; jamás en el cuerpo de la respuesta.
+    console.error("[ERROR_INTERNO]", error);
+  }
+
   const body: ErrorBody = {
     error: {
       code: httpError.code,
-      message: httpError.message,
-      ...(httpError.details?.length ? { details: httpError.details } : {}),
+      message: esInterno ? "Error interno del servidor." : httpError.message,
+      ...(!esInterno && httpError.details?.length ? { details: httpError.details } : {}),
     },
   };
   return Response.json(body, { status: httpError.status });

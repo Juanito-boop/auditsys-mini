@@ -9,6 +9,9 @@ import { SESSION_MAX_AGE_SECONDS } from "@/server/lib/constants";
 import type { Actor, Role, UserDTO } from "@/shared/types";
 import type { LoginInput } from "./schemas";
 
+/** Hash bcrypt de "dummy" con coste 10, para igualar el tiempo cuando no hay usuario. */
+const HASH_DUMMY = "$2b$10$ZfngIh1.IW1pa0SeAy9EieRrxBAZcrgDjGuJJ1j9BSJeV0S/lfuvO";
+
 /** Opciones comunes de los servicios; `now` permite pruebas deterministas. */
 export interface ServiceDeps {
   db: Db;
@@ -90,12 +93,11 @@ export async function login(
     .get(input.email) as UserRow | undefined;
 
   let coincide = false;
-  if (fila) {
-    try {
-      coincide = await compare(input.password, fila.password_hash);
-    } catch {
-      coincide = false;
-    }
+  // Siempre se ejecuta un compare: sin usuario se usa el hash señuelo.
+  try {
+    coincide = await compare(input.password, fila?.password_hash ?? HASH_DUMMY);
+  } catch {
+    coincide = false;
   }
 
   if (!fila || !coincide) {
