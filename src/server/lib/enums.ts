@@ -11,3 +11,6 @@ export const controlStatusValues = [
 export const severityValues = ["baja", "media", "alta", "critica"] as const;
 export const priorityValues = ["baja", "media", "alta"] as const;
 export const themeValues = ["Organizacional", "Personas", "Físico", "Tecnológico"] as const;
+export const printRequestOriginValues = ["resultados", "informe"] as const;
+
+export type PrintRequestOrigin = (typeof printRequestOriginValues)[number];

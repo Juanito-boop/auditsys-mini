@@ -77,3 +77,14 @@ export interface RecommendationRow {
   priority: Priority;
   created_at: string;
 }
+
+export interface PrintRequestRow {
+  id: number;
+  audit_id: number;
+  user_id: number;
+  requested_at: string;
+  user_name_snapshot: string;
+  user_email_snapshot: string;
+  origin: "resultados" | "informe";
+  request_key: string;
+}

@@ -391,6 +391,9 @@ function imprimirConteos(db: Db): void {
   console.log(`- Evidencias: ${contar(db, "SELECT COUNT(*) AS total FROM evidences")}`);
   console.log(`- Hallazgos: ${contar(db, "SELECT COUNT(*) AS total FROM findings")}`);
   console.log(`- Recomendaciones: ${contar(db, "SELECT COUNT(*) AS total FROM recommendations")}`);
+  console.log(
+    `- Solicitudes de impresión: ${contar(db, "SELECT COUNT(*) AS total FROM report_print_requests")}`,
+  );
 }
 
 function seedDatos(db: Db, auditorId: number): void {

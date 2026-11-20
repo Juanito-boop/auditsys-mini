@@ -199,6 +199,33 @@ export interface ReportDTO {
   limitaciones: string[];
 }
 
+export type PrintRequestOrigin = "resultados" | "informe";
+
+export interface PrintRequestDTO {
+  id: number;
+  auditId: number;
+  userId: number;
+  userName: string;
+  userEmail: string | null;
+  requestedAt: string;
+  origin: PrintRequestOrigin;
+}
+
+export interface PrintRequestPorUsuarioDTO {
+  userId: number;
+  userName: string;
+  userEmail: string | null;
+  total: number;
+  ultimaSolicitudEn: string;
+}
+
+export interface PrintRequestsDTO {
+  auditId: number;
+  total: number;
+  solicitudes: PrintRequestDTO[];
+  porUsuario: PrintRequestPorUsuarioDTO[];
+}
+
 export interface DashboardDTO {
   resumen: {
     totalAuditorias: number;

@@ -81,6 +81,18 @@ CREATE TABLE IF NOT EXISTS recommendations (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+CREATE TABLE IF NOT EXISTS report_print_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  audit_id INTEGER NOT NULL REFERENCES audits(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  requested_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  user_name_snapshot TEXT NOT NULL,
+  user_email_snapshot TEXT NOT NULL,
+  origin TEXT NOT NULL CHECK (origin IN ('resultados','informe')),
+  request_key TEXT NOT NULL,
+  UNIQUE (audit_id, user_id, request_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_audits_auditor_id ON audits(auditor_id);
 CREATE INDEX IF NOT EXISTS idx_audits_status ON audits(status);
 CREATE INDEX IF NOT EXISTS idx_audit_controls_audit_id ON audit_controls(audit_id);
@@ -89,6 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_controls_status ON audit_controls(status);
 CREATE INDEX IF NOT EXISTS idx_evidences_audit_control_id ON evidences(audit_control_id);
 CREATE INDEX IF NOT EXISTS idx_findings_audit_id ON findings(audit_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_finding_id ON recommendations(finding_id);
+CREATE INDEX IF NOT EXISTS idx_report_print_requests_audit_requested ON report_print_requests(audit_id, requested_at DESC, id DESC);
 `;
 
 export const SCHEMA_TABLES = [
@@ -99,4 +112,5 @@ export const SCHEMA_TABLES = [
   "evidences",
   "findings",
   "recommendations",
+  "report_print_requests",
 ] as const;

@@ -73,6 +73,15 @@ describe("resultados, informe y dashboard", () => {
     expect(informe.resultados.counts.recomendaciones).toBe(1);
   });
 
+  it("getReport solo lee: abrir el informe no registra solicitudes de impresión", () => {
+    expect(getReport(ctx, 1).portada.organization).toBe("Empresa Uno");
+
+    const total = (
+      db.prepare("SELECT COUNT(*) AS total FROM report_print_requests").get() as { total: number }
+    ).total;
+    expect(total).toBe(0);
+  });
+
   it("dashboard respeta el alcance por rol y muestra todas las categorías", () => {
     createFinding(ctx, 1, hallazgo);
 

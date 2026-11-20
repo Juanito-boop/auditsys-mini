@@ -4,8 +4,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { PrintReportButton } from "@/components/audits/results/PrintReportButton";
 import { ReportView } from "@/components/audits/results/ReportView";
-import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Loading } from "@/components/ui/Loading";
 import { useApiResource } from "@/lib/use-api";
@@ -53,7 +53,7 @@ export default function ReportPage() {
           >
             Volver a la auditoría
           </Link>
-          <Button onClick={() => window.print()}>Imprimir / Guardar como PDF</Button>
+          <PrintReportButton auditId={id} origin="informe" />
         </div>
       </div>
       <ReportView reporte={reporte.data} />

@@ -2,11 +2,13 @@
 
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Loading } from "@/components/ui/Loading";
+import { PrintReportButton } from "@/components/audits/results/PrintReportButton";
+import { PrintRequestHistory } from "@/components/audits/results/PrintRequestHistory";
 import { ReportView } from "@/components/audits/results/ReportView";
 import { useApiResource } from "@/lib/use-api";
 import { formatPercent } from "@/lib/ui";
@@ -19,6 +21,7 @@ interface ResultsPanelProps {
 export function ResultsPanel({ auditId }: ResultsPanelProps) {
   const resultados = useApiResource<ResultsDTO>(`/api/audits/${auditId}/results`);
   const reporte = useApiResource<ReportDTO>(`/api/audits/${auditId}/report`);
+  const [version, setVersion] = useState(0);
 
   if (resultados.loading || reporte.loading) {
     return <Loading label="Cargando resultados e informe…" />;
@@ -59,7 +62,11 @@ export function ResultsPanel({ auditId }: ResultsPanelProps) {
           >
             Ver informe imprimible
           </Link>
-          <Button onClick={() => window.print()}>Imprimir / Guardar como PDF</Button>
+          <PrintReportButton
+            auditId={auditId}
+            origin="resultados"
+            onRegistered={() => setVersion((v) => v + 1)}
+          />
         </div>
       </div>
 
@@ -110,6 +117,8 @@ export function ResultsPanel({ auditId }: ResultsPanelProps) {
           ) : null}
         </div>
       </Card>
+
+      <PrintRequestHistory key={version} auditId={auditId} />
 
       <ReportView reporte={reporte.data} />
     </div>

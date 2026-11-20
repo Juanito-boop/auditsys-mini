@@ -10,6 +10,7 @@ import type {
   ControlRow,
   EvidenceRow,
   FindingRow,
+  PrintRequestRow,
   RecommendationRow,
 } from "@/server/db/types";
 import { notFound } from "@/server/lib/errors";
@@ -19,6 +20,7 @@ import type {
   ControlDTO,
   EvidenceDTO,
   FindingDTO,
+  PrintRequestDTO,
   RecommendationDTO,
   Severity,
 } from "@/shared/types";
@@ -162,5 +164,18 @@ export function toFindingDTO(db: Db, fila: FindingRow): FindingDTO {
     created_at: fila.created_at,
     recommendations: recomendaciones.map(toRecommendationDTO),
     warningSinRecomendacion: recomendaciones.length === 0,
+  };
+}
+
+/** `puedeVerEmail` depende del rol del actor: los auditores solo ven el snapshot de nombre. */
+export function toPrintRequestDTO(fila: PrintRequestRow, puedeVerEmail: boolean): PrintRequestDTO {
+  return {
+    id: fila.id,
+    auditId: fila.audit_id,
+    userId: fila.user_id,
+    userName: fila.user_name_snapshot,
+    userEmail: puedeVerEmail ? fila.user_email_snapshot : null,
+    requestedAt: fila.requested_at,
+    origin: fila.origin,
   };
 }
