@@ -19,17 +19,19 @@ Aplicación web académica para gestionar auditorías de seguridad de la informa
 | RF07 | **Calcular resultados** (cantidades/porcentajes con fórmula visible; N/A fuera del denominador) | `src/server/lib/compliance.ts` (`calculateIndicators`), `src/server/reports/service.ts` (`getResults`), `GET /api/audits/[id]/results`; `ResultsPanel.tsx`. La fórmula se muestra en pantalla y en el informe. |
 | RF08 | **Generar informe** (datos, alcance, resultados, hallazgos, recomendaciones, imprimible) | `getReport` en `src/server/reports/service.ts`; `GET /api/audits/[id]/report`; `ReportView.tsx`, `src/app/(app)/audits/[id]/report/page.tsx` y `src/app/globals.css` (`@media print`). |
 | RF09 | **Dashboard** (cuadro de indicadores de gestión de auditorías) | `src/server/dashboard/{service,schemas}.ts`; `GET /api/dashboard`; `src/app/(app)/dashboard/page.tsx` y `DashboardCharts.tsx`. |
+| RF10 | **Registro de solicitudes de impresión/descarga** (adicional, solicitado tras una observación docente) | `src/server/print-requests/{service,schemas}.ts`; tabla `report_print_requests` en `src/server/db/schema.ts`; `GET/POST /api/audits/[id]/report/print-requests`; `PrintReportButton.tsx` y `PrintRequestHistory.tsx`. |
 
-La **autenticación y el control de acceso no son un RF numerado**: son funcionalidad transversal descrita en el RNF de seguridad (§1.2), en `src/server/auth/**` y en `src/app/api/auth/**`.
+La **autenticación y el control de acceso no son un RF numerado**: son funcionalidad transversal descrita en el RNF de seguridad (§1.2), en `src/server/auth/**` y en `src/app/api/auth/**`. RF10 es **adicional** a los nueve requisitos originales; no los renumeró.
 
 ### 1.2 Requisitos no funcionales (RNF)
 
 - **Usabilidad / responsive:** Tailwind 4; rejillas `sm`/`md`/`lg`, tablas en escritorio y tarjetas en móvil, `aria-label`, `role="tablist"`, mensajes de carga/error/estado vacío.
 - **Persistencia:** SQLite con `better-sqlite3` en `data/auditsys.db`; `PRAGMA foreign_keys = ON`; un único archivo, sin migraciones.
 - **Validación:** Zod 4 en `body`, `params` y `query` (`src/server/lib/http.ts`) + `CHECK` de SQLite; errores 400 con `details` en español (`src/server/lib/errors.ts`).
-- **Seguridad (funcionalidad transversal):** bcrypt para contraseñas; JWT HS256 con `jose` en cookie `httpOnly`, `sameSite=lax` y `secure` en producción; `requireUser()` revalida nombre, correo y rol contra la BD en cada petición y devuelve 401 si el usuario ya no existe; el login ejecuta un `compare` con hash señuelo cuando el correo no existe (coste constante); `toErrorResponse` siempre responde `"Error interno del servidor."` en un 500, sin detalle interno; `allowedDevOrigins: ["127.0.0.1"]` permite desarrollo por IP. Además: roles, scope por auditor, consultas preparadas y secretos en `.env.local`.
-- **Trazabilidad:** `audit_controls` enlaza control, evaluación, evidencias y hallazgos; `getResults()` expone `trazabilidad` y el informe incluye un anexo con referencias `EVD-ABC-…`.
-- **Mantenibilidad:** separación `schemas` / `service` / `route`, DTOs compartidos en `src/shared/types.ts`, contexto inyectado en los servicios y 33 pruebas automatizadas.
+- **Seguridad (funcionalidad transversal):** bcrypt para contraseñas; JWT HS256 con `jose` en cookie `httpOnly`, `sameSite=lax` y `secure` en producción; `requireUser()` revalida nombre, correo y rol contra la BD en cada petición y devuelve 401 si el usuario ya no existe; el login ejecuta un `compare` con hash señuelo cuando el correo no existe (coste constante); `toErrorResponse` siempre responde `"Error interno del servidor."` en un 500, sin detalle interno; `allowedDevOrigins: ["127.0.0.1"]` permite desarrollo por IP. Además: roles, scope por auditor, consultas preparadas y secretos en `.env.local`. En RF10 la identidad y los snapshots salen del actor revalidado, nunca del body; `userEmail` solo se expone a `admin`; no se guardan IP ni user-agent.
+- **Trazabilidad:** `audit_controls` enlaza control, evaluación, evidencias y hallazgos; `getResults()` expone `trazabilidad` y el informe incluye un anexo con referencias `EVD-ABC-…`. RF10 añade `report_print_requests`, con snapshots inmutables de nombre/correo, `requested_at`, origen y `request_key` idempotente; `UNIQUE(audit_id, user_id, request_key)` evita duplicados por reintento y el cuerpo usa Zod estricto (UUID y origen `resultados`/`informe`; sin filtros de query).
+- **Precisión semántica:** el registro de RF10 documenta una **intención de impresión/descarga**, no una descarga confirmada: el diálogo del navegador puede cancelarse. El contador es informativo y no probatorio; cualquier usuario con acceso puede generar solicitudes artificiales. Es un riesgo conocido y aceptado: no se añadió techo temporal (falsearía el recuento) ni se describe el contador como evidencia.
+- **Mantenibilidad:** separación `schemas` / `service` / `route`, DTOs compartidos en `src/shared/types.ts`, contexto inyectado en los servicios y 48 pruebas automatizadas en 4 archivos.
 
 ### 1.3 Historias de usuario
 
@@ -58,6 +60,7 @@ flowchart LR
     CU05 --> CU06[CU-06 Registrar hallazgos y recomendaciones]
     CU06 --> CU07[CU-07 Consultar resultados]
     CU07 --> CU08[CU-08 Generar e imprimir informe]
+    CU08 --> CU10[CU-10 Registrar solicitudes de impresión/descarga]
     A[Administrador] --> CU09[CU-09 Administrar catálogo]
     CU09 --> CU03
 ```
@@ -69,8 +72,9 @@ flowchart LR
 - **CU-05:** añadir evidencias por referencia, fuente, fecha y marca de simulación.
 - **CU-06:** documentar hallazgos con severidad y añadir recomendaciones con prioridad.
 - **CU-07:** ver conteos, indicadores, desgloses y trazabilidad control → evidencia → hallazgo → recomendación.
-- **CU-08:** abrir el informe imprimible y guardarlo como PDF desde el navegador.
+- **CU-08:** abrir el informe imprimible y solicitar la impresión o el guardado como PDF desde el navegador; el archivo real depende del usuario y del diálogo del navegador.
 - **CU-09:** dar de alta o editar controles y activarlos/desactivarlos (solo administrador).
+- **CU-10:** al pulsar "Imprimir / Guardar como PDF" en resultados o en el informe, registrar la intención antes de abrir el diálogo; consultar el total, el desglose por usuario y las 50 solicitudes recientes. Solo admin ve correos en la API; la UI nunca los muestra.
 
 ---
 
@@ -85,6 +89,8 @@ erDiagram
     AUDIT_CONTROLS ||--o{ FINDINGS : "audit_control_id + audit_id RESTRICT"
     AUDITS ||--o{ FINDINGS : "audit_id"
     FINDINGS ||--o{ RECOMMENDATIONS : "finding_id CASCADE"
+    AUDITS ||--o{ REPORT_PRINT_REQUESTS : "audit_id CASCADE"
+    USERS ||--o{ REPORT_PRINT_REQUESTS : "user_id RESTRICT"
 
     USERS {
         integer id PK
@@ -153,6 +159,16 @@ erDiagram
         text priority
         text created_at
     }
+    REPORT_PRINT_REQUESTS {
+        integer id PK
+        integer audit_id FK
+        integer user_id FK
+        text requested_at
+        text user_name_snapshot
+        text user_email_snapshot
+        text origin
+        text request_key
+    }
 ```
 
 **Diccionario de datos resumido**
@@ -166,8 +182,9 @@ erDiagram
 | `evidences` | `id`, `audit_control_id`, `reference`, `is_simulated` | INTEGER / TEXT | Evidencia por referencia (sin archivo); `is_simulated` es 0/1. |
 | `findings` | `id`, `audit_control_id`, `audit_id`, `severity` | INTEGER / TEXT | Hallazgo con condición, criterio, causa y efecto; FK compuesta a `audit_controls(id, audit_id)` con `RESTRICT`. |
 | `recommendations` | `id`, `finding_id`, `priority` | INTEGER / TEXT | Acción correctiva de un hallazgo; prioridad `baja`/`media`/`alta`. |
+| `report_print_requests` | `id`, `audit_id`, `user_id`, `requested_at`, `user_name_snapshot`, `user_email_snapshot`, `origin`, `request_key` | INTEGER / TEXT | Intención de impresión/descarga; `origin` en `resultados`/`informe`; `UNIQUE(audit_id, user_id, request_key)` e índice `(audit_id, requested_at DESC, id DESC)`. |
 
-Todas las tablas tienen `id INTEGER PRIMARY KEY AUTOINCREMENT` y `created_at TEXT` con valor por defecto ISO-8601. Las FK usan `ON DELETE CASCADE` cuando el hijo no tiene sentido sin el padre (`audits → audit_controls`, `audit_controls → evidences`, `findings → recommendations`) y `RESTRICT` para no perder integridad referencial (`users → audits`, `controls → audit_controls`, `audit_controls → findings`). Hay índices en `auditor_id`, estados y claves foráneas.
+Todas las tablas tienen `id INTEGER PRIMARY KEY AUTOINCREMENT`; todas salvo `report_print_requests` tienen `created_at TEXT` con valor por defecto ISO-8601, y esta última usa `requested_at TEXT` con el mismo formato. Las FK usan `ON DELETE CASCADE` cuando el hijo no tiene sentido sin el padre (`audits → audit_controls`, `audits → report_print_requests`, `audit_controls → evidences`, `findings → recommendations`) y `RESTRICT` para no perder integridad referencial (`users → audits`, `controls → audit_controls`, `audit_controls → findings`, `users → report_print_requests`). Hay índices en `auditor_id`, estados, claves foráneas y `(audit_id, requested_at DESC, id DESC)`.
 
 ---
 
@@ -178,14 +195,14 @@ flowchart LR
     N[Navegador] --> P["proxy.ts: redirección optimista"]
     P --> PG["Páginas App Router: dashboard, audits, controls, login"]
     PG --> UI["Client Components: paneles, gráficas, UI"]
-    UI --> API["Route Handlers /api: auth, audits, controls, evaluations, evidences, findings, recommendations, reports, dashboard"]
+    UI --> API["Route Handlers /api: auth, audits, controls, evaluations, evidences, findings, recommendations, reports, print-requests, dashboard"]
     API --> G["Guards de servidor: requireUser, requireAdmin, scope"]
-    G --> S["Services en src/server: módulos de negocio"]
+    G --> S["Services en src/server: módulos de negocio, incl. print-requests"]
     S --> C[schemas Zod y serializers DTO]
     S --> DB[("SQLite: data/auditsys.db")]
 ```
 
-**Módulos de `src/server`:** `audits`, `controls`, `evaluations`, `evidences`, `findings`, `reports`, `dashboard`, `auth` y `db` (más `lib/` con constantes, errores, HTTP, compliance y serializadores). Es **una sola app Next.js** que sirve la API y la interfaz; no hay backend separado.
+**Módulos de `src/server`:** `audits`, `controls`, `evaluations`, `evidences`, `findings`, `reports`, `print-requests`, `dashboard`, `auth` y `db` (más `lib/` con constantes, errores, HTTP, compliance y serializadores). Es **una sola app Next.js** que sirve la API y la interfaz; no hay backend separado.
 
 **Contratos HTTP.** Todas las respuestas correctas usan `{ "data": … , "message"?: … }` y los errores `{ "error": { "code", "message", "details"? } }`.
 
@@ -206,6 +223,8 @@ flowchart LR
 | POST | `/api/findings/[id]/recommendations` | Añadir recomendación |
 | PUT / DELETE | `/api/recommendations/[id]` | Editar / borrar recomendación |
 | GET | `/api/audits/[id]/results`, `/api/audits/[id]/report`, `/api/dashboard` | Resultados, informe y panel |
+| GET | `/api/audits/[id]/report/print-requests` | Historial: `total`, `porUsuario` (todas las filas) y 50 recientes; sin filtros de query |
+| POST | `/api/audits/[id]/report/print-requests` | Registrar intención con `{ origin, requestKey }`: 201 alta, 200 replay, 409 mismo UUID con otro origen; 400/401/403/404 por validación, sesión, scope o auditoría |
 
 **Separación de responsabilidades.** Cada módulo tiene `schemas.ts` (contratos Zod y tipos), `service.ts` (reglas de negocio y SQL) y la ruta `src/app/api/.../route.ts` (autenticar, validar, llamar al servicio y serializar). La ruta no contiene reglas de negocio; el servicio no importa `next/headers`. Los servicios reciben un contexto inyectado `{ db, actor, now }` (`src/server/lib/context.ts`): `db` es la conexión, `actor` el usuario autenticado y `now()` la fecha. En producción se usa `getDb()` y `requireUser()`; en tests se usa SQLite en memoria (`createDb(":memory:")`) y `makeCtx(db, actor, fecha)` para fijar la fecha. Así las reglas se prueban sin servidor HTTP.
 
@@ -215,6 +234,7 @@ flowchart LR
 - **`proxy.ts` (antes middleware) solo redirige optimistamente** si falta la cookie; no verifica el JWT. `jose` se usa únicamente en guards de servidor (`requireUser`/`verifyToken`), que son la autoridad real.
 - **Evidencias por referencia:** se guarda `reference`, `source` y `is_simulated`, sin subida ni almacenamiento de archivos; reduce alcance y riesgo.
 - **PDF por `window.print()` + `@media print`:** el informe es HTML imprimible; no se añadió ninguna librería PDF.
+- **Solicitudes de impresión (RF10):** el botón hace `POST` antes de `window.print()`; reutiliza la misma `requestKey` si el `POST` falla para que el reintento sea idempotente, y bloquea el doble clic. El listado aplica scope con `assertAuditAccess`, no exige auditoría abierta, calcula `total`/`porUsuario` sobre todas las filas y limita `solicitudes` a 50. La tabla se crea con `CREATE TABLE IF NOT EXISTS` al abrir la BD; en un servidor ya arrancado hay que reiniciar `npm run dev` para verla.
 - **SQLite sin migraciones:** `SCHEMA_SQL` con `CREATE TABLE IF NOT EXISTS`, ejecutado al abrir la conexión; adecuado para una entrega académica mono-usuario.
 - **Una sola app Next.js:** API + UI en el mismo despliegue, sin CORS ni servicios adicionales.
 - **Sin tecnología nueva fuera de la spec:** no se añadió ninguna tecnología no prevista. `tsx`, `vitest` y los tipos de desarrollo **no estaban instalados**: se instalaron desde la caché offline de npm, con 8 `overrides` para fijar versiones de las herramientas de test.
@@ -232,8 +252,9 @@ Todas las pantallas de la app usan `AppShell` (barra lateral, navegación, rol, 
 5. **Evaluación** (pestaña `evaluaciones`): `EvaluationPanel` con filtro por estado, borradores por fila, guardado por control, justificación N/A y badges de estado/severidad. Vacío: "No hay controles en este estado".
 6. **Evidencias** (pestaña `evidencias`): selector de control, formulario con descripción/fuente/fecha/referencia y `is_simulated` marcado por defecto, listado por control y borrado con `ConfirmDialog`.
 7. **Hallazgos** (pestaña `hallazgos`): `FindingPanel` con formulario de condición/criterio/causa/efecto/severidad, lista de recomendaciones con prioridad, edición en línea y aviso cuando un hallazgo no tiene recomendación.
-8. **Resultados e informe** (pestaña `resultados` y `/audits/[id]/report`): `ResultsPanel` muestra indicadores, fórmula, limitaciones y avisos; `ReportView` presenta portada, metodología, resultados, trazabilidad y anexo de 20 evidencias; botón **Imprimir / Guardar como PDF**.
+8. **Resultados e informe** (pestaña `resultados` y `/audits/[id]/report`): `ResultsPanel` muestra indicadores, fórmula, limitaciones y avisos; `ReportView` presenta portada, metodología, resultados, trazabilidad y anexo de 20 evidencias; botón **Imprimir / Guardar como PDF**, que registra la solicitud antes de abrir el diálogo (ver punto 10).
 9. **Catálogo de controles** (`/controls`, solo admin): tabla con código/nombre/tema/criterio/estado, modal de alta/edición con `ControlForm` y confirmación para activar/desactivar; para auditor se muestra "Sin permisos".
+10. **Historial de solicitudes** (pestaña `resultados`, `PrintRequestHistory`): tarjeta con el título **"Registro de solicitudes de impresión/descarga"**, aviso de que **no son descargas confirmadas** (el diálogo puede cancelarse), total de solicitudes, desglose por usuario (nombre, cantidad y última solicitud) y 50 solicitudes recientes con origen y fecha. La UI nunca muestra correos; la tarjeta se oculta al imprimir (`print-hidden`) y se recarga al registrarse una solicitud desde resultados.
 
 ---
 
@@ -243,14 +264,16 @@ Todas las pantallas de la app usan `AppShell` (barra lateral, navegación, rol, 
 
 - `npm run typecheck` — correcto, sin errores de tipos.
 - `npm run lint` — correcto, sin incidencias de ESLint.
-- `npm test` — **3 archivos, 33 tests, todos pasan** (Vitest 4.1.10): `tests/unit/compliance.test.ts` (cálculo puro) y `tests/integration/{services,reports}.test.ts` (SQLite en memoria).
+- `npm test` — **4 archivos, 48 tests, todos pasan** (Vitest 4.1.10): `tests/unit/compliance.test.ts` (cálculo puro) y `tests/integration/{services,reports,print-requests}.test.ts` (SQLite en memoria).
 - `npm run build` — compila correctamente; rutas API dinámicas (`ƒ`), páginas estáticas/dinámicas y proxy activo.
-- `npm run seed` (tras borrar la BD) — Usuarios 2, Controles 15, Auditorías 2, `audit_controls`: implementado 5 / parcialmente_implementado 4 / no_implementado 4 / no_aplicable 2 / pendiente 15, Evidencias 20, Hallazgos 7, Recomendaciones 9.
+- `npm run seed` (tras borrar la BD) — Usuarios 2, Controles 15, Auditorías 2, `audit_controls`: implementado 5 / parcialmente_implementado 4 / no_implementado 4 / no_aplicable 2 / pendiente 15, Evidencias 20, Hallazgos 7, Recomendaciones 9, `Solicitudes de impresión: 0` (el seed no crea eventos falsos).
 - `npm run seed` (segunda ejecución) — "La auditoría demo ya existe: no se reinserta ningún dato"; mismos conteos.
 
 **Verificación HTTP con cookie:** `POST /api/audits` 201 (id 3, con 15 filas pendientes) y `GET /api/audits/3` coherente; `/api/controls` 200 (15), `/api/audits` 200 (2), `/api/audits/1/evaluations` 200 (15), `/api/audits/1/findings` 200 (7), `/api/audits/1/results` 200, `/api/audits/1/report` 200 (20 evidencias en anexo), `/api/dashboard` 200 (`estaVacio=false`, promedio 38,5).
 
 **Indicador real de Empresa ABC:** implementados **38,5 %** (5/13), parciales **30,8 %** (4/13), no implementados **30,8 %** (4/13); denominador 13 = 15 evaluados − 2 no aplicables; 15 pendientes en la auditoría borrador "Universidad Ejemplo". Fórmula: `% = (cantidad / (evaluados − no_aplicables)) × 100`.
+
+**Limitación del registro RF10:** el contador mide intenciones iniciadas desde la app, no archivos PDF efectivamente descargados; cualquier usuario con acceso podría generar solicitudes artificiales. Es informativo, no probatorio, y no se aplica un techo temporal porque alteraría el recuento real de intentos.
 
 ### 6.2 Casos verificados
 
@@ -258,7 +281,7 @@ Todas las pantallas de la app usan `AppShell` (barra lateral, navegación, rol, 
 | --- | --- | --- | --- | --- |
 | T01 | `npm run typecheck` | Sin errores | Sin errores | PASA |
 | T02 | `npm run lint` | Sin incidencias | Sin incidencias | PASA |
-| T03 | `npm test` | 3 archivos / 33 tests | 3 archivos / 33 tests en verde | PASA |
+| T03 | `npm test` | 4 archivos / 48 tests | 4 archivos / 48 tests en verde | PASA |
 | T04 | `npm run build` | Compila con proxy y rutas `ƒ` | Compila correctamente | PASA |
 | T05 | Login con credenciales demo | 200 y cookie HttpOnly | 200, cookie HttpOnly | PASA |
 | T06 | `/api/auth/me` sin cookie | 401 | 401 | PASA |
@@ -279,6 +302,11 @@ Todas las pantallas de la app usan `AppShell` (barra lateral, navegación, rol, 
 | T21 | Diseño responsive (emulación headless Chromium) | Sin desbordes a 375 y 1280 px; menú móvil funcional | `scrollWidth == clientWidth` a 375 y 1280 px; sidebar oculto a 375 y visible a 1280; hamburguesa abre/cierra el menú | PASA |
 | T22 | Descarga real de un archivo PDF | Se descarga un PDF desde el navegador | No se descargó ningún archivo; solo se verificaron el botón y los estilos de impresión (ver T23) | NO VERIFICADO |
 | T23 | Botón y estilos de impresión | `window.print()` y vista de impresión depurada | 1 llamada registrada a `window.print()`; en emulación de impresión se ocultan `aside/header/nav/.print-hidden` y se muestra `#print-report` con fondo blanco | PASA |
+| T24 | RF10: alta, replay y conflicto | 201 al registrar, 200 al repetir la misma clave sin insertar, 409 si la misma clave se usa con otro origen | `registerPrintRequest` devuelve `created=true` → 201 y `created=false` → 200; la misma clave con otro `origin` → 409 `CONFLICTO`; `UNIQUE` también cubre el caso concurrente | PASA |
+| T25 | RF10: alcance y auditorías cerradas | Auditor ajeno 403, auditoría inexistente 404, cerrada permitida | `assertAuditAccess` aplica scope sin `assertOpen`; verificado en `print-requests.test.ts` | PASA |
+| T26 | RF10: abrir informe y límites del listado | `getReport()` no inserta; `total` y `porUsuario` cubren todas las filas y `solicitudes` se limita a 50 | `getReport()` deja la tabla en 0; con 51 filas el total agrupado es 51 y el listado devuelve las 50 más recientes ordenadas por fecha/id descendente | PASA |
+| T27 | RF10: privacidad y snapshots | Email solo para admin; nombre/correo no cambian si se edita el usuario; sin IP/user-agent | DTO expone `userEmail` solo con rol `admin`; la UI nunca lo muestra; snapshots inmutables verificados en tests; tabla sin columnas de IP ni user-agent | PASA |
+| T28 | RF10: botón y reintento | Doble clic bloqueado; si falla el POST no se imprime y se reintenta con la misma clave | `enCursoRef` bloquea el segundo clic; `requestKeyRef` se conserva en error y se limpia solo tras éxito, antes de `window.print()`; no se afirma que se descargara un PDF | PASA |
 
 ---
 
@@ -293,7 +321,8 @@ Todas las pantallas de la app usan `AppShell` (barra lateral, navegación, rol, 
 | 3:00–3:50 | Volver a ABC → Evidencias: mostrar referencia `EVD-ABC-…` y etiqueta "Simulada". |
 | 3:50–4:50 | Hallazgos: crear uno sobre control 8.15 (parcial) y añadir recomendación; menciona el rechazo 409 sobre controles implementados. |
 | 4:50–5:50 | Resultados: 38,5 % implementados, 30,8 % parciales, 30,8 % no implementados, denominador 13 y fórmula. |
-| 5:50–7:00 | Informe: portada, trazabilidad, anexo de 20 evidencias y botón "Imprimir / Guardar como PDF". |
+| 5:50–6:30 | Informe: portada, trazabilidad, anexo de 20 evidencias y botón "Imprimir / Guardar como PDF". |
+| 6:30–7:00 | RF10: volver a Resultados, pulsar el botón y mostrar que el total del historial sube; aclarar que registra la solicitud, no una descarga confirmada, y que el correo solo se expone por API a admin. |
 
 ### 8 preguntas probables del jurado
 
